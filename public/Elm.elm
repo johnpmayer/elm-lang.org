@@ -34,6 +34,7 @@ other w = width (w `div` 2) [markdown|
 
 #### News
 
+* [Introducing FRP WebGL](/blog/announce/webgl.elm)
 * [Drastically improved FFI](/blog/announce/0.11.elm) in 0.11
 * [Package manager released!](/blog/announce/PackageManager.elm)
 * First release of [Elm REPL](/blog/announce/Repl.elm)
