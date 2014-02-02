@@ -86,7 +86,7 @@ Unfortunately, WebGL features a programming model of an imperative state machine
 
 It's no large wonder that libraries like [three.js](http://threejs.org/) are so popular.
 
-This of course skips over other issues like the boilerplate of managing state with the main loop, controlling your graphics application with user inputs via callbacks, and having to write your awesome procedural world generator in JavaScipt. These aren't problems with WebGL itself, but they demonstrate that when it comes to performance Javascript graphics, we might be doing it wrong. 
+This of course skips over other issues like the boilerplate of managing state with the main loop, controlling your graphics application with user inputs via callbacks, and having to write your awesome procedural world generator in JavaScipt. These aren't problems with WebGL itself, but they demonstrate that when it comes to performance web graphics, we might be doing it wrong. 
 
 Can Elm help to make 3D graphics more pleasant?
 
@@ -94,16 +94,22 @@ Can Elm help to make 3D graphics more pleasant?
 
 meat = [markdown|
 
-This release includes a few features that enable the use of WebGL.
+WebGL in Elm aims to remove the boilerplate from and add some safety to the stock WebGL API. The approach manages to retain full control of the graphics processing through shaders while providing compatibility with the Elm-model of managing interactive user interfaces. This release includes a few key features.
 
-* Type-Checkable WebGL Shader Literals
+* Real GLSL shaders with extra type information
 * An Element that can be lifted using Signal
 * A full-featured linear algebra library
+
+It's worth noting that this library does not intend to hide all of the details of WebGL. 
 
 Type-Checkable GLSL
 -------------------
 
-A GLSL Shader is typed by its inputs. In the below example, the shader expects that each vertex will have position and color information, that the model will have a global rotation factor, and that it can read/write to another color variable shared by all other shaders in the program pipeline. We capture this information by parsing the program source and annotating the type of the shader with records.
+WebGL uses the OpenGL Shading Language, or GLSL, for direct control of the graphics pipeline. You can think of shaders as the pieces of code which are run in parallel on the GPU for each pixel. Shaders tell the GPU how to draw your model. GLSL is a domain-specific-language; it is excellent at specifying the basic operations of rendering.
+
+The shader below is a vertex shader; it operates on vertices or points in space. In this example, each vertex has a position and color. All vertices share a global rotation factor, and finally, each vertex will carry another color variable to the other shaders in the program.
+
+We capture this information by parsing the program source and annotating the type of the shader with records.
 
 ``` Elm
 simpleVert : Shader { point : V3, color : V3 } { rot : M4x4 } { vcolor : V3 }
@@ -122,12 +128,12 @@ void main() {
 |\]
 ```
 
-Enhancing the types of shader literals allows us to leverage the type checker to detect errors at compile time. For instance, we can make sure that programs are built with a compatible vertex shader and fragment shader...
+Enhancing the types of shader literals allows us to leverage the type checker to detect errors at compile time. For instance, we can make sure that we compile programs that comprise of compatible shader parts...
 
     link : Shader attr unif vary -> Shader {} {} var -> Program attr unif
     link vertShader fragShader = ...
 
-... and that models are built with progams and buffers that are compatible.
+... and that, whenever we use a program, we are providing the expected input data.
 
     encapsulate : Program attr unif -> Buffer attr -> unif -> Model
     encapsulate : program buffer params = ...
@@ -153,8 +159,18 @@ main = lift2 simpleGL Window.width Mouse.x
 Translation, Rotation, and Scaling... Oh My!
 --------------------------------------------
 
-3D graphics is often heavy on linear algebra. Because of that, this release includes a derivative of [MJS](https://code.google.com/p/webgl-mjs/) (MIT License).
+3D graphics is often heavy on linear algebra. This release includes a derivative of the [MJS](https://code.google.com/p/webgl-mjs/) project (MIT License).
 
-MJS provides many utilities to build 3D transforms, including affine transforms to manipulate models, as well as perspective and camera transforms commonly seen in 3D simulations.
+MJS provides many utilities to build 3D transforms, including affine transforms to manipulate models, as well as perspective and camera transforms commonly seen in 3D simulations. Here's a small example of the Elm bindings to MJS.
+
+```
+myPoint : V3
+myPoint = v3 4 7 2
+
+myTransform : M4x4
+myTransform = makeTranslate3 1 6 8
+
+myNewPoint : V3
+myNewPoint = mul4x4 myTransform myPoint
 
 |]
