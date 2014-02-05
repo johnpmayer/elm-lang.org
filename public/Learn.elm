@@ -49,6 +49,7 @@ rightCol = [markdown|
 * [Website skeleton](https://github.com/evancz/elm-lang.org#elm-langorg-a-template-for-creating-websites-in-elm)
 * [Game skeleton](https://github.com/evancz/elm-lang.org/blob/master/public/examples/Intermediate/GameSkeleton.elm#L1)
 * [Making Pong](/blog/Pong.elm)
+* [WebGL Deep Dive](/learn/Spinning-box.elm)
 
 |]
 
