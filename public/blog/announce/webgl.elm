@@ -18,21 +18,21 @@ everything mousex wid =
     let w = min 600 wid
     in flow down 
       [ width w intro
-      , simpleGL w <| toFloat mousex
+      , triangleGL w <| toFloat mousex
       , width w meat ]
 
-simpleTriangle : Triangle { point : V3, color : V3 }
-simpleTriangle = 
+triangleTriangle : Triangle { point : V3, color : V3 }
+triangleTriangle = 
   let a = { point = v3 0 1 0, color = v3 255 121 0 }
       b = { point = v3 0.866 -0.5 0, color = v3 115 210 22 }
       c = { point = v3 -0.866 -0.5 0, color = v3 114 159 207 }
   in (a,b,c)
 
-simpleBuf : Buffer { point : V3, color : V3 }
-simpleBuf = bind [simpleTriangle]
+triangleBuf : Buffer { point : V3, color : V3 }
+triangleBuf = bind [triangleTriangle]
 
-simpleVert : Shader { point : V3, color : V3 } { rot : M4x4 } { vcolor : V3 }
-simpleVert = [glShader|
+triangleVert : Shader { point : V3, color : V3 } { rot : M4x4 } { vcolor : V3 }
+triangleVert = [glShader|
 
 attribute vec3 point;
 attribute vec3 color;
@@ -46,8 +46,8 @@ void main() {
 
 |]
 
-simpleFrag : Shader {} {} { vcolor : V3 }
-simpleFrag = [glShader|
+triangleFrag : Shader {} {} { vcolor : V3 }
+triangleFrag = [glShader|
 
 precision mediump float;
 varying vec3 vcolor;
@@ -58,16 +58,36 @@ void main() {
 
 |]
 
-simpleProg : Program { point : V3, color : V3 } { rot : M4x4 }
-simpleProg = link simpleVert simpleFrag
+triangleProg : Program { point : V3, color : V3 } { rot : M4x4 }
+triangleProg = link triangleVert triangleFrag
 
-simpleModel : Float -> Model
-simpleModel mousex = encapsulate simpleProg simpleBuf { rot = makeRotate (mousex / 100) (v3 0 0 1) }
+triangleModel : Float -> Model
+triangleModel mousex = encapsulate triangleProg triangleBuf { rot = makeRotate (mousex / 100) (v3 0 0 1) }
 
-simpleGL : Int -> Float -> Element
-simpleGL wid mousex = webgl (wid, wid) [simpleModel mousex]
+triangleGL : Int -> Float -> Element
+triangleGL wid mousex = webgl (wid, wid) [triangleModel mousex]
 
 intro = [markdown|
+<style type="text/css">
+p { text-align: justify }
+pre { background-color: white;
+      padding: 10px;
+      border: 1px solid rgb(216, 221, 225);
+      border-radius: 4px;
+}
+code > span.kw { color: #268BD2; }
+code > span.dt { color: #268BD2; }
+code > span.dv, code > span.bn, code > span.fl { color: #D33682; }
+code > span.ch { color: #DC322F; }
+code > span.st { color: #2AA198; }
+code > span.co { color: #93A1A1; }
+code > span.ot { color: #A57800; }
+code > span.al { color: #CB4B16; font-weight: bold; }
+code > span.fu { color: #268BD2; }
+code > span.re { }
+code > span.er { color: #D30102; font-weight: bold; }
+</style>
+
 
 WebGL
 =====
@@ -94,26 +114,73 @@ Can Elm help to make 3D graphics more pleasant?
 
 meat = [markdown|
 
-WebGL in Elm aims to remove the boilerplate from and add some safety to the stock WebGL API. The approach manages to retain full control of the graphics processing through shaders while providing compatibility with the Elm-model of managing interactive user interfaces. This release includes a few key features.
+WebGL in Elm aims to remove the boilerplate from and add some safety to the stock WebGL API. 
+The approach manages to retain full control of the graphics processing through shaders while providing compatibility with the Elm-model of managing interactive user interfaces. This release includes a few key features.
 
-* Real GLSL shaders with extra type information
-* An Element that can be lifted using Signal
-* A full-featured linear algebra library
+* Uses Element similar to collage
+* Linear algebra batteries included
+* Real GLSL shaders that typecheck!
 
-It's worth noting that this library does not intend to hide all of the details of WebGL. 
+Compatibility with Signals
+--------------------------
+
+The rotating triangle above demonstrates that we can _lift_ our rendering code over signals like the window dimensions and the mouse position. 
+If you haven't yet, mouse your mouse around and resize the width of your browser, and notice that the triangle Element reacts automatically.
+You can see below the clean separation between pure code and Signal code; this aims to work just like Forms in collage.
+
+``` Haskell
+-- Window.width : Signal Int
+-- Mouse.x : Signal Int
+main : Signal Element
+main = lift2 triangleGL Window.width Mouse.x
+
+triangleGL : Int -> Int -> Element
+triangleGL wid mousex = 
+  let axis = (v3 0 0 1)
+      rotation = makeRotate (toFloat mousex / 100) axis
+      triangleModel = encapsulate triangleProgram 
+                                  triangleBuffer 
+                                  { rot = rotation }
+  in webgl (wid, wid) [triangleModel mousex]
+```
+
+Efficient 3D Transforms
+-----------------------
+
+3D graphics is often heavy on linear algebra. This release includes a derivative of the [MJS](https://code.google.com/p/webgl-mjs/) project (MIT License).
+
+MJS provides many utilities to build 3D transforms, including affine transforms to manipulate models, as well as perspective and camera transforms commonly seen in 3D simulations. Here's a small example of the Haskell bindings to MJS.
+
+``` Haskell
+myPoint : V3
+myPoint = v3 4 7 2
+
+myTransform : M4x4
+myTransform = makeTranslate3 1 6 8
+
+myNewPoint : V3
+myNewPoint = mul4x4 myTransform myPoint
+
+-- myNewPoint == v3 5 13 10
+```
+
 
 Type-Checkable GLSL
 -------------------
 
-WebGL uses the OpenGL Shading Language, or GLSL, for direct control of the graphics pipeline. You can think of shaders as the pieces of code which are run in parallel on the GPU for each pixel. Shaders tell the GPU how to draw your model. GLSL is a domain-specific-language; it is excellent at specifying the basic operations of rendering.
+It's worth noting that this library does not intend to hide all of the details of WebGL; this library supports arbitrary shaders for direct control over the graphics pipeline using the OpenGL Shading Language, or GLSL! 
+A true domain-specific-language, GLSL is excellent at specifying the basic operations of rendering.
+You can think of shaders as the pieces of code which are run in parallel on the GPU for each polygon or pixel - shaders tell the GPU how to render your bits. 
 
-The shader below is a vertex shader; it operates on vertices or points in space. In this example, each vertex has a position and color. All vertices share a global rotation factor, and finally, each vertex will carry another color variable to the other shaders in the program.
-
+The shader below is a vertex shader; it operates on vertices or points in space. 
+In this example, each vertex has a position and color, and all vertices in the model share a global rotation transform.
 We capture this information by parsing the program source and annotating the type of the shader with records.
 
-``` Elm
-simpleVert : Shader { point : V3, color : V3 } { rot : M4x4 } { vcolor : V3 }
-simpleVert = [glShader|
+``` Haskell
+triangleVert : Shader { point : V3, color : V3 } 
+                      { rot : M4x4 } 
+                      { vcolor : V3 }
+triangleVert = [glShader|
 
 attribute vec3 point;
 attribute vec3 color;
@@ -128,49 +195,36 @@ void main() {
 |\]
 ```
 
-Enhancing the types of shader literals allows us to leverage the type checker to detect errors at compile time. For instance, we can make sure that we compile programs that comprise of compatible shader parts...
+The next shader is a fragment shader; roughly speaking, once vertices are assigned to pixels, the fragment shaders figures out what each pixel looks like. Notice that, while it has no more information about vertices or global constants, it has information that was passed to it from the above shader, which ran in the previous stage in the pipeline.
 
-    link : Shader attr unif vary -> Shader {} {} var -> Program attr unif
-    link vertShader fragShader = ...
+``` Haskell
+triangleFrag : Shader {} {} { vcolor : V3 }
+triangleFrag = [glShader|
+
+precision mediump float;
+varying vec3 vcolor;
+
+void main() {
+  gl_FragColor = vec4(vcolor / 256.0, 1.0);
+}
+
+|\]
+```
+
+Including this information in the types of shader literals lets us use the type checker to detect errors at compile time. For instance, we can make sure that we compile programs that comprise of compatible shader parts...
+
+``` Haskell
+link : Shader a u v -> Shader {} {} v -> Program a u
+link vertShader fragShader = ...
+```
 
 ... and that, whenever we use a program, we are providing the expected input data.
 
-    encapsulate : Program attr unif -> Buffer attr -> unif -> Model
-    encapsulate : program buffer params = ...
-
-Compatibility with Signals
---------------------------
-
-Nothing in the Graphics.WebGL API deals with Signals. The rotating triangle earlier in the post demonstrates that we can _lift_ our rendering code over signals such as the window dimensions and the mouse position. You can see below the clean separation between pure code and code involving Signals.
-
-```Elm
-simpleModel : Float -> Model
-simpleModel mousex = 
-  let rot = makeRotate (mousex / 100) (v3 0 0 1)
-  in encapsulate simpleProg simpleBuf { rot = rot }
-
-simpleGL : Int -> Float -> Element
-simpleGL wid mousex = webgl (wid, wid) [simpleModel mousex]
-
-main : Signal Element
-main = lift2 simpleGL Window.width Mouse.x
+``` Haskell
+encapsulate : Program attr unif -> Buffer attr 
+                                -> unif 
+                                -> Model
+encapsulate : program buffer params = ...
 ```
-
-Translation, Rotation, and Scaling... Oh My!
---------------------------------------------
-
-3D graphics is often heavy on linear algebra. This release includes a derivative of the [MJS](https://code.google.com/p/webgl-mjs/) project (MIT License).
-
-MJS provides many utilities to build 3D transforms, including affine transforms to manipulate models, as well as perspective and camera transforms commonly seen in 3D simulations. Here's a small example of the Elm bindings to MJS.
-
-```
-myPoint : V3
-myPoint = v3 4 7 2
-
-myTransform : M4x4
-myTransform = makeTranslate3 1 6 8
-
-myNewPoint : V3
-myNewPoint = mul4x4 myTransform myPoint
 
 |]
