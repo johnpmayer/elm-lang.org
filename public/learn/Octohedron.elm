@@ -1,6 +1,6 @@
 
-import Bitwise (and)
-import MJS (V3,v3,toTuple3,add,direction,normalize,scale)
+import Bitwise (and, shiftRight)
+import MJS (V3,v3,toTuple3,add,sub,direction,normalize,scale,cross)
 import Graphics.WebGL (Triangle, mapTriangle)
 import Website.Skeleton (skeleton)
 import Window (dimensions)
@@ -13,11 +13,16 @@ main = skeleton everything <~ dimensions
 everything : Int -> Element
 everything wid = 
   let w = min 600 wid
+      showOctogon = map (mapTriangle toTuple3) octohedron
+      showSubdivided = map (mapTriangle showVert) dochiliatetracontakaioctahedron
   in flow down <| map (width w)
     [ intro
-    , asText . map (mapTriangle toTuple3) <| octohedron
-    , meat
-    , asText . map (mapTriangle showVert) . map addNormals . halfEdgeN 4 <| octohedron
+    , asText showOctogon
+    , meat1
+    , fittedImage w (div w 3) "http://www.rhythm.com/~ivan/images/dm/trisubdiv.GIF"
+    , meat2
+    , asText ("Length: " ++ show (length showSubdivided))
+    , asText showSubdivided
     ]
 
 intro : Element
@@ -53,9 +58,7 @@ _John P Mayer_
 In this post we'll look at one basic and one advanced use of vector graphics to compute data that can (and will) be used in a 3D application in Elm. In doing so, we will be introduced to some of the basic facilities of vector math in Elm.
 
 The Octohedron
-==============
-
-_Not quite 20-sided_
+--------------
 
 As a big fan of platonic solids, I thought it would be interesting to generate some 3D shapes. 
 In Elm, we're going to represent our shapes as lists of triangles or points in three dimensions.
@@ -70,8 +73,9 @@ octohedron : [Triangle V3]
 ```
 
 We're going to clever here and derive each face from the first eight natural numbers.
-The coordinate of each vertex of each triangle will be the unit vectors ±i, ±j, and ±k, with the direction determined by the 3 least significant bits of the input number.
-It is easy to see that this will generate an octohedron inscribed in the unit circle, with axis-aligned vertices.
+The coordinate of each vertex of each triangle will be the unit vectors ±i, ±j, and ±k, with their respective directions (positive or negative) determined by the 3 least significant bits of the input number.
+We also take extra steps to make sure the vertices of each face are counterclockwise from the perspective of outside the solid.
+The below code generates an octohedron inscribed in the unit circle, with axis-aligned vertices.
 
 ```Haskell
 octohedron : [Triangle V3]
@@ -79,57 +83,86 @@ octohedron =
   let i = v3 1 0 0
       j = v3 0 1 0
       k = v3 0 0 1
+      countBits : Int -> Int -> Int
+      countBits c x = case c of
+        0 -> 0
+        n -> (if (and x 1 == 1) then 1 else 0) + countBits (n-1) (shiftRight x 1)
       makeFace : Int -> Triangle V3
       makeFace n = 
         let cx = if (and n 1 == 0) then 1 else -1
             cy = if (and n 2 == 0) then 1 else -1
             cz = if (and n 4 == 0) then 1 else -1
-        in (scale i cx, scale j cy, scale k cz)
+            counterclockwise = mod (countBits 3 n) 2 == 0
+        in if counterclockwise 
+           then (scale i cx, scale j cy, scale k cz)
+           else (scale i cx, scale k cz, scale j cy)
   in map makeFace [0..7]
 ```
 
-You'll notice that we use two functions here. 
-The first, v3, makes a vector in 3 dimensions, or V3, from three floating point numbers. 
+You'll notice that we use two functions from the MJS library here. 
+The first, v3, makes a vector, a V3, from three floating point numbers. 
 The second, scale, multiplies a vector by a scalar to produce a new vector.
 Not much to it!
 Below is our generated list of triangles:
 
 |]
 
-meat : Element
-meat = [markdown|
+meat1 : Element
+meat1 = [markdown|
 
-more about MJS
+Triangle Subdivision
+--------------------
+
+Our goal in this next section will be to transform our humble octohedron into a polyhedron with 2048 sides.
+I'm not completely sure, but I believe that this would be called a *dochiliatetracontakaioctahedron.*
+We will obtain this result by dividing each triangle into 4 sub-triangles.
+
+|]
+
+meat2 : Element
+meat2 = [markdown|
+
+The algorithm can be described by simply finding the three midpoints of the triangle, and creating the 4 ensuing small triangles.
+Note that because Elm values are immutable, we reuse rather than copy the original vertices. 
+This should help with memory usage in our representation.
+Again, we take care to preserve the counterclockwise order.
 
 ```Haskell
 midpoint : V3 -> V3 -> V3
-midpoint v1 v2 = add v1 <| scale (direction v1 v2) 0.5
-```
+midpoint v1 v2 = scale (add v1 v2) 0.5
 
-```Haskell
-halfEdge : Triangle V3 -> [Triangle V3]
-halfEdge (a,b,c) =
+subdivide : Triangle V3 -> [Triangle V3]
+subdivide (a,b,c) =
   let ab = normalize <| midpoint a b
       bc = normalize <| midpoint b c
       ca = normalize <| midpoint c a
-  in [(a,ab,ca),(b,ab,bc),(c,bc,ca),(ab,bc,ca)] 
+  in [(a,ab,ca),(b,bc,ab),(c,ca,bc),(ab,bc,ca)] 
 ```
+
+To apply the subdivision multiple times, we use these simple helpers.
 
 ```Haskell
 repeat : (a -> a) -> Int -> a -> a
 repeat f n x = foldr (\_ y -> f y) x [0..(n-1)]
 
-halfEdgeN : Int -> [Triangle V3] -> [Triangle V3]
-halfEdgeN = repeat (concat . map halfEdge)
+subdivideN : Int -> [Triangle V3] -> [Triangle V3]
+subdivideN = repeat (concat . map subdivide)
 ```
+
+Finally, we're going to augment each face with a normal vector.
+Because we've been so careful to maintain the counterclockwise order of the vertices,
+we simply take the normalized cross product of two "edge" vectors.
 
 ```Haskell
 addNormals : Triangle V3 -> Triangle { pos : V3, norm : V3 }
 addNormals (a,b,c) =
-  let center = normalize <| scale (add (add a b) c) (1/3)
-      addNormal v = { pos = v, norm = center }
+  let normal = normalize <| cross (sub b a) (sub c a)
+      addNormal v = { pos = v, norm = normal }
   in mapTriangle addNormal (a,b,c)
 ```
+
+All of this was computed at page load, and most of that time is likely spent pretty-printing the information.
+We'll render the below mesh data using webgl in our [next example](/learn/GLSL.elm).
 
 |]
 
@@ -138,35 +171,45 @@ octohedron =
   let i = v3 1 0 0
       j = v3 0 1 0
       k = v3 0 0 1
+      countBits : Int -> Int -> Int
+      countBits c x = case c of
+        0 -> 0
+        n -> (if (and x 1 == 1) then 1 else 0) + countBits (n-1) (shiftRight x 1)
       makeFace : Int -> Triangle V3
       makeFace n = 
         let cx = if (and n 1 == 0) then 1 else -1
             cy = if (and n 2 == 0) then 1 else -1
             cz = if (and n 4 == 0) then 1 else -1
-        in (scale i cx, scale j cy, scale k cz)
+            counterclockwise = mod (countBits 3 n) 2 == 0
+        in if counterclockwise 
+           then (scale i cx, scale j cy, scale k cz)
+           else (scale i cx, scale k cz, scale j cy)
   in map makeFace [0..7]
 
 showVert : { pos : V3, norm : V3 } -> String
-showVert {pos,norm} = show (toTuple3 pos, toTuple3 norm)
+showVert {pos,norm} = show ("pos",toTuple3 pos,"norm",toTuple3 norm)
 
 midpoint : V3 -> V3 -> V3
-midpoint v1 v2 = add v1 <| scale (direction v1 v2) 0.5
+midpoint v1 v2 = scale (add v1 v2) 0.5
 
-halfEdge : Triangle V3 -> [Triangle V3]
-halfEdge (a,b,c) =
+subdivide : Triangle V3 -> [Triangle V3]
+subdivide (a,b,c) =
   let ab = normalize <| midpoint a b
       bc = normalize <| midpoint b c
       ca = normalize <| midpoint c a
-  in [(a,ab,ca),(b,ab,bc),(c,bc,ca),(ab,bc,ca)] 
+  in [(a,ab,ca),(b,bc,ab),(c,ca,bc),(ab,bc,ca)] 
 
 repeat : (a -> a) -> Int -> a -> a
 repeat f n x = foldr (\_ y -> f y) x [0..(n-1)]
 
-halfEdgeN : Int -> [Triangle V3] -> [Triangle V3]
-halfEdgeN = repeat (concat . map halfEdge)
+subdivideN : Int -> [Triangle V3] -> [Triangle V3]
+subdivideN = repeat (concat . map subdivide)
 
 addNormals : Triangle V3 -> Triangle { pos : V3, norm : V3 }
 addNormals (a,b,c) =
-  let center = normalize <| scale (add (add a b) c) (1/3)
-      addNormal v = { pos = v, norm = center }
+  let normal = normalize <| cross (sub b a) (sub c a)
+      addNormal v = { pos = v, norm = normal }
   in mapTriangle addNormal (a,b,c)
+
+dochiliatetracontakaioctahedron : [Triangle { pos : V3, norm : V3 }]
+dochiliatetracontakaioctahedron = map addNormals . subdivideN 1 <| octohedron

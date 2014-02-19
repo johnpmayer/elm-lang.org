@@ -124,7 +124,7 @@ void main () {
   gl_Position = per * cam * rot * vec4(pos, 1.0);;
   vcolor = color;
   vec4 modelNorm = rot * vec4(norm, 1.0);
-  vlumens = 0.4 + 0.6 * lumens * dot(modelNorm.xyz, sun);
+  vlumens = 0.1 + lumens * (0.4 + 0.4 * dot(modelNorm.xyz, sun));
 }
 |]
 

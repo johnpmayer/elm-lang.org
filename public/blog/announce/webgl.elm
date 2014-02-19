@@ -17,9 +17,9 @@ everything : Int -> Int -> Element
 everything mousex wid =
     let w = min 600 wid
     in flow down 
-      [ width w intro
+      [ intro
       , triangleGL w <| toFloat mousex
-      , width w meat ]
+      , meat ]
 
 triangleTriangle : Triangle { point : V3, color : V3 }
 triangleTriangle = 
@@ -67,7 +67,7 @@ triangleModel mousex = encapsulate triangleProg triangleBuf { rot = makeRotate (
 triangleGL : Int -> Float -> Element
 triangleGL wid mousex = webgl (wid, wid) [triangleModel mousex]
 
-intro = [markdown|
+intro = width 600 [markdown|
 <style type="text/css">
 p { text-align: justify }
 pre { background-color: white;
@@ -112,7 +112,7 @@ Can Elm help to make 3D graphics more pleasant?
 
 |]
 
-meat = [markdown|
+meat = width 600 [markdown|
 
 WebGL in Elm aims to remove the boilerplate from and add some safety to the stock WebGL API. 
 The approach manages to retain full control of the graphics processing through shaders while providing compatibility with the Elm-model of managing interactive user interfaces. This release includes a few key features.

@@ -33,6 +33,8 @@ leftCol = [markdown|
 * [Records](/learn/Records.elm)
 * [Components: Embed in HTML](/learn/Components.elm)
 * [Ports: Talk to JS](/learn/Ports.elm)
+* [MJS: Working with Vectors](/learn/Octohedron.elm)
+* [GLSL: Writing Shaders](/learn/GLSL.elm)
 
 |]
 
